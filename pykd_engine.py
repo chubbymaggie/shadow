@@ -42,6 +42,11 @@ chunk_arena_expr = '((mozglue!arena_chunk_t *)0x%x)->arena'
 # windbg expressions for parsing nursery data
 nursery_expr = 'xul!nsXPConnect::gSelf->mRuntime->mJSRuntime->gc.nursery'
 
+# filled holes expression (specific to SVGImageElement/ArrayObject arrangements)
+filled_holes_expr = 's 0x0 l?0xffffffff 06 01 00 06 01 00 00 00 00 00 00 00 00 00 e5 e5 00 00 00 00 1e 00 00 00 1e 00 00 00 1e 00 00 00'
+
+# XXX: this function is getting complicated; needs to be re-written with
+#      pykd's typed memory access features
 def to_int(val):
     sval = str(val)
     start = sval.find('0x')
@@ -50,14 +55,18 @@ def to_int(val):
         end = sval.find('\n')
         
         if end == -1:
-            return int(sval[start:], 16)
+            return int(sval[start:].replace('`', ''), 16)
         else:
-            return int(sval[start:end], 16)
-        
+            return int(sval[start:end].replace('`', ''), 16)
+    
     elif sval.startswith('unsigned int'):
-        return int(sval[len('unsigned int'):])
+        if sval.startswith('unsigned int64'):
+            return int(sval[len('unsigned int64'):])
+        else:
+            return int(sval[len('unsigned int'):])
+    
     else:
-        return int(sval)
+        return int(sval.replace('`', ''))
 
 def buf_to_le(buf):
     # this function is from seanhn's tcmalloc_gdb
@@ -71,19 +80,21 @@ def buf_to_le(buf):
 def get_page_size():
     return pykd.pageSize()
 
-def offsetof(struct_name, member_name):
-    sval = pykd.dbgCommand('?? #FIELD_OFFSET(%s, %s)' \
-            % (struct_name, member_name))
+def get_xul_version():
+    version = pykd.loadCStr(pykd.module('xul').offset('gToolkitVersion'))
+    return version
 
-    if sval.startswith('long 0n'):
-        return int(sval[len('long 0n'):])
-    elif sval.startswith('long 0x'):
-        return int(sval[len('long 0x'):], 16)
-    else:
-        return int(sval)
+def get_arch():
+    if pykd.is64bitSystem():
+        return 'x86-64'
+
+    return 'x86'
+
+def offsetof(struct_name, member_name):
+    return pykd.typeInfo(struct_name).fieldOffset(member_name)
 
 def sizeof(type_name):
-    return to_int(pykd.dbgCommand('?? sizeof(%s)' % (type_name)))
+    return pykd.typeInfo(type_name).size()
 
 def get_value(symbol):
     mozglue = pykd.module('mozglue')

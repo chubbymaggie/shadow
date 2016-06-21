@@ -28,6 +28,7 @@ parsed = false
 dbg_engine = ''
 pickle_file = ''
 xul_symbols_pickle = ''
+xul_version = ''
 
 try:
     import gdb
@@ -40,7 +41,9 @@ except ImportError:
         import pykd_engine as dbg
         dbg_engine = 'pykd'
         pickle_file = '%s/%s' % (tempfile.gettempdir(), 'jeheap.pkl')
-        xul_symbols_pickle = '%s\\pdb\\xul.pdb.pkl' % (os.path.dirname(os.path.abspath(__file__)))
+        xul_version = dbg.get_xul_version()
+        xul_symbols_pickle = '%s\\pdb\\xul-%s.pdb.pkl' \
+            % (os.path.dirname(os.path.abspath(__file__)), xul_version)
     except ImportError:
         try:
             import lldb
@@ -392,7 +395,13 @@ def parse_all_runs(proc = none):
     chunk_npages = jeheap.chunk_size >> 12
 
     # offset of bits in arena_chunk_map_t in double words
-    bitmap_offset = dbg.offsetof('arena_chunk_map_t', 'bits') / jeheap.DWORD_SIZE
+    if dbg_engine == 'pykd':
+        # this really speeds up parsing
+        bitmap_offset = \
+            dbg.offsetof('mozglue!arena_chunk_map_t', 'bits') / jeheap.DWORD_SIZE
+    else:
+        bitmap_offset = \
+            dbg.offsetof('arena_chunk_map_t', 'bits') / jeheap.DWORD_SIZE
 
     # number of double words occupied by an arena_chunk_map_t
     chunk_map_dwords = (bitmap_offset / jeheap.DWORD_SIZE) + 1
@@ -535,7 +544,9 @@ def parse_chunks():
         if dbg_engine == 'gdb':
             expr = dbg.chunk_radix_expr % (child_cnt, dw_fmt, node)
         elif dbg_engine == 'pykd':
-            child_cnt = child_cnt / 6 # XXX: is this correct on 64-bits?
+            if dbg.get_arch() == 'x86':
+                child_cnt = child_cnt / 6
+
             expr = dbg.chunk_radix_expr % (node, child_cnt)
         else: # lldb
             expr = ''
@@ -606,30 +617,32 @@ def help():
     '''Details about the commands provided by shadow'''
 
     print('\n[shadow] De Mysteriis Dom Firefox')
-    print('[shadow] %s\n' % (VERSION))
+    print('[shadow] shadow %s' % (VERSION))
+    print('[shadow] Firefox v%s (%s)\n' % (xul_version, dbg.get_arch()))
     print('[shadow] jemalloc-specific commands:')
     print('[shadow]   jechunks                : dump info on all available chunks')
     print('[shadow]   jearenas                : dump info on jemalloc arenas')
     print('[shadow]   jerun <address>         : dump info on a single run')
     print('[shadow]   jeruns [-cs]            : dump info on jemalloc runs')
-    print('[shadow]                                 -c: current runs only')
-    print('[shadow]                    -s <size class>: runs for the given size class only')
+    print('[shadow]                                 -c : current runs only')
+    print('[shadow]                    -s <size class> : runs for the given size class only')
     print('[shadow]   jebins                  : dump info on jemalloc bins')
     print('[shadow]   jeregions <size class>  : dump all current regions of the given size class')
-    print('[shadow]   jesearch [-cqs] <hex>   : search the heap for the given hex dword')
-    print('[shadow]                                 -c: current runs only')
-    print('[shadow]                                 -q: quick search (less details)')
-    print('[shadow]                    -s <size class>: regions of the given size only')
+    print('[shadow]   jesearch [-cfqs] <hex>  : search the heap for the given hex dword')
+    print('[shadow]                                 -c : current runs only')
+    print('[shadow]                                 -q : quick search (less details)')
+    print('[shadow]                    -s <size class> : regions of the given size only')
+    print('[shadow]                                 -f : search for filled region holes')
     print('[shadow]   jeinfo <address>        : display all available details for an address')
     print('[shadow]   jedump [filename]       : dump all available jemalloc info to screen (default) or file')
     print('[shadow]   jeparse                 : parse jemalloc structures from memory')
     print('[shadow] Firefox-specific commands:')
     print('[shadow]   nursery                 : display info on the SpiderMonkey GC nursery')
     print('[shadow]   symbol [-vjdx] <size>   : display all Firefox symbols of the given size')
-    print('[shadow]                                 -v: only class symbols with vtable')
-    print('[shadow]                                 -j: only symbols from SpiderMonkey')
-    print('[shadow]                                 -d: only DOM symbols')
-    print('[shadow]                                 -x: only non-SpiderMonkey symbols')
+    print('[shadow]                                 -v : only class symbols with vtable')
+    print('[shadow]                                 -j : only symbols from SpiderMonkey')
+    print('[shadow]                                 -d : only DOM symbols')
+    print('[shadow]                                 -x : only non-SpiderMonkey symbols')
     print('[shadow]   pa <address> [<length>] : modify the ArrayObject\'s length (default new length 0x666)')
     print('[shadow] Generic commands:')
     print('[shadow]   version                 : output version number')
@@ -638,7 +651,28 @@ def help():
 def version():
     '''Output version number'''
     
-    print('[shadow] %s' % (VERSION))
+    global VERSION
+    print('[shadow] shadow %s' % (VERSION))
+
+def firefox_version():
+    '''Output Firefox's version we are attached to'''
+
+    global xul_version
+    print('[shadow] Firefox v%s (%s)' % (xul_version, dbg.get_arch()))
+
+def show_filled_holes():
+    print('[shadow] searching for filled holes (SVGImageElement/ArrayObject specific)')
+
+    try:
+        out = dbg.execute(dbg.filled_holes_expr)
+        out_len = len(out)
+        if out_len != 0:
+            print(out)
+    except:
+        print('[shadow] arrangement pattern not found')
+
+    if out_len == 0:
+        print('[shadow] arrangement pattern not found')
 
 def dump_all(filename, dump_to_screen = true, proc = none):
     '''Dump all available jemalloc info to screen (default) or to a file'''

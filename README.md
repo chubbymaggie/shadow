@@ -11,13 +11,16 @@ exploitation swiss army knife.
 * [WinDBG 6.3.9600.17200]
 (https://msdn.microsoft.com/en-us/windows/hardware/hh852365.aspx)
 x86 (since Firefox stable is x86-only currently)
-* [pykd version 0.2.0.29](https://pykd.codeplex.com/releases/view/119220)
-(the latest stable version at the time of development)
+* [pykd version 0.3.0.36](https://pykd.codeplex.com/releases/view/618995)
 * Many different Firefox releases, but extensively with:
 [31.7.0-esr](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/31.7.0esr/),
 [35.0.1](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/35.0.1/),
 [36.0.1](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/36.0.1/),
-[38.0.5](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/38.0.5/).
+[38.0.5](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/38.0.5/),
+[39.0](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/39.0/),
+[40.0](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/40.0/),
+[43.0](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/43.0/).
+[44.0](http://ftp.mozilla.org/pub/mozilla.org/firefox/releases/44.0/).
 
 *Note: If you work with a Firefox version older than 36.0 use the mozjs branch!*
 
@@ -26,9 +29,13 @@ Installation
 
 At first you need to setup WinDBG with [Mozilla's symbol server]
 (https://developer.mozilla.org/en/docs/Using_the_Mozilla_symbol_server).
-You also need to install [pykd version 0.2.0.29]
-(https://pykd.codeplex.com/releases/view/119220). Then copy the **shadow**
-directory you have cloned from GitHub to some path (e.g. C:\\tmp\\).
+You also need to install [pykd version 0.3.0.36]
+(https://pykd.codeplex.com/releases/view/618995). Then copy the **shadow**
+directory you have cloned from GitHub to some path (e.g. *C:\\tmp\\*).
+
+I have also added an example WinDBG initialization script at
+"auxiliary/windbg-init.cmd". Place it at *C:\\tmp\\* and start WinDBG with
+*windbg.exe -c "$$>< C:\tmp\windbg-init.cmd"*.
 
 Finally, from within WinDBG issue the following commands:
 
@@ -44,24 +51,25 @@ Finally, from within WinDBG issue the following commands:
 [shadow]   jearenas                : dump info on jemalloc arenas
 [shadow]   jerun <address>         : dump info on a single run
 [shadow]   jeruns [-cs]            : dump info on jemalloc runs
-[shadow]                                 -c: current runs only
-[shadow]                    -s <size class>: runs for the given size class only
+[shadow]                                 -c : current runs only
+[shadow]                    -s <size class> : runs for the given size class only
 [shadow]   jebins                  : dump info on jemalloc bins
 [shadow]   jeregions <size class>  : dump all current regions of the given size class
-[shadow]   jesearch [-cqs] <hex>   : search the heap for the given hex dword
-[shadow]                                 -c: current runs only
-[shadow]                                 -q: quick search (less details)
-[shadow]                    -s <size class>: regions of the given size only
+[shadow]   jesearch [-cfqs] <hex>  : search the heap for the given hex dword
+[shadow]                                 -c : current runs only
+[shadow]                                 -q : quick search (less details)
+[shadow]                    -s <size class> : regions of the given size only
+[shadow]                                 -f : search for filled region holes)
 [shadow]   jeinfo <address>        : display all available details for an address
 [shadow]   jedump [filename]       : dump all available jemalloc info to screen (default) or file
 [shadow]   jeparse                 : parse jemalloc structures from memory
 [shadow] Firefox-specific commands:
 [shadow]   nursery                 : display info on the SpiderMonkey GC nursery
 [shadow]   symbol [-vjdx] <size>   : display all Firefox symbols of the given size
-[shadow]                                 -v: only class symbols with vtable
-[shadow]                                 -j: only symbols from SpiderMonkey
-[shadow]                                 -d: only DOM symbols
-[shadow]                                 -x: only non-SpiderMonkey symbols
+[shadow]                                 -v : only class symbols with vtable
+[shadow]                                 -j : only symbols from SpiderMonkey
+[shadow]                                 -d : only DOM symbols
+[shadow]                                 -x : only non-SpiderMonkey symbols
 [shadow]   pa <address> [<length>] : modify the ArrayObject's length (default new length 0x666)
 [shadow] Generic commands:
 [shadow]   version                 : output version number
@@ -92,10 +100,10 @@ structures) of specific sizes. This is useful when you're trying to exploit
 use-after-free bugs, or when you want to position interesting victim objects to
 overwrite/corrupt.
 
-In the "aux" directory you can find a small PDB parsing utility named **symhex**.
+In the "auxiliary" directory you can find a small PDB parsing utility named **symhex**.
 Run it on "xul.pdb" to generate the Python pickle file that **shadow** expects in
-the "pdb" directory (as "pdb/xul.pdb.pkl"). Before running **symhex** make sure
-you have registered "msdia90.dll"; for example on my Windows 8.1 x86-64
+the "pdb" directory (as "pdb/xul-*VERSION*.pdb.pkl"). Before running **symhex** make
+sure you have registered "msdia90.dll"; for example on my Windows 8.1 x86-64
 installation I did that with
 
 *regsvr32 "c:\Program Files (x86)\Common Files\Microsoft Shared\VC\msdia90.dll"*

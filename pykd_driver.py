@@ -17,9 +17,6 @@ none = None
 if __name__ == '__main__':
     argc = len(sys.argv)
 
-    # don't remove this (still required?)
-    tmp = shadow.pykd.dbgCommand('?? mozglue!arenas[0]')
-
     if argc == 1:
         shadow.help()
         sys.exit()
@@ -32,6 +29,7 @@ if __name__ == '__main__':
 
     elif sys.argv[1] == 'version':
         shadow.version()
+        shadow.firefox_version()
 
     elif sys.argv[1] == 'jedump':
         arg = ''
@@ -195,10 +193,11 @@ if __name__ == '__main__':
         current_runs = false
         quick = false
         size_class = 0
+        filled_holes = false
 
         try:
 
-            alist, args = getopt.getopt(sys.argv[2:], 'cs:q')
+            alist, args = getopt.getopt(sys.argv[2:], 'cs:qf')
 
             for (field, val) in alist:
                 
@@ -211,19 +210,33 @@ if __name__ == '__main__':
                 if field in '-q':
                     quick = true
 
+                if field in '-f':
+                    filled_holes = true
+                    shadow.show_filled_holes()
+                    break
+
+            if filled_holes == true:
+                sys.exit()
+
             search_for = args[0]
 
         except:
 
-            print('[shadow] usage: jesearch [-cqs] <hex dword>')
+            if filled_holes == true:
+                sys.exit()
+
+            print('[shadow] usage: jesearch [-cfqs] <hex dword>')
             print('[shadow] options:')
             print('[shadow]    -c           search current runs only')
             print('[shadow]    -q           quick search')
             print('[shadow]    -s <size>    regions of the given size only')
+            print('[shadow]    -f           search for filled region holes')
             print('[shadow] for example: jesearch -c -s 256 0x41424344')
+            print('[shadow]          or: jesearch -f')
             sys.exit()
 
-        shadow.search(search_for, region_size = size_class, \
+        if filled_holes == false:
+            shadow.search(search_for, region_size = size_class, \
                 search_current_runs = current_runs, quick_search = quick)
 
     sys.exit()
